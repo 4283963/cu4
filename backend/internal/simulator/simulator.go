@@ -32,7 +32,6 @@ func NewSimulator() *Simulator {
 		{
 			ID:          "feeder-1",
 			Name:        "1号投喂车",
-			Position:    models.Vector3{X: 8, Y: 1.2, Z: 0},
 			TargetAngle: 0,
 			Radius:      8.0,
 			Speed:       0.3,
@@ -43,7 +42,6 @@ func NewSimulator() *Simulator {
 		{
 			ID:          "feeder-2",
 			Name:        "2号投喂车",
-			Position:    models.Vector3{X: -5, Y: 1.2, Z: 5},
 			TargetAngle: math.Pi,
 			Radius:      7.0,
 			Speed:       0.25,
@@ -81,6 +79,21 @@ func NewSimulator() *Simulator {
 				Covered:   false,
 			}
 			idx++
+		}
+	}
+
+	for i := range feeders {
+		maxRadius := poolCfg.Radius - 1.5
+		if feeders[i].Radius > maxRadius {
+			feeders[i].Radius = maxRadius
+		}
+		if feeders[i].Radius < 1.0 {
+			feeders[i].Radius = 1.0
+		}
+		feeders[i].Position = models.Vector3{
+			X: math.Cos(feeders[i].TargetAngle) * feeders[i].Radius,
+			Y: 1.2,
+			Z: math.Sin(feeders[i].TargetAngle) * feeders[i].Radius,
 		}
 	}
 
@@ -133,12 +146,24 @@ func (s *Simulator) update() {
 			continue
 		}
 		f := &s.feeders[i]
-		f.TargetAngle += f.Speed * 0.05
-		if f.TargetAngle > 2*math.Pi {
-			f.TargetAngle -= 2 * math.Pi
+
+		step := f.Speed * 0.05
+		if step < 0 {
+			step = -step
 		}
+		f.TargetAngle += step
+
+		maxRadius := s.poolConfig.Radius - 1.5
+		if f.Radius > maxRadius {
+			f.Radius = maxRadius
+		}
+		if f.Radius < 1.0 {
+			f.Radius = 1.0
+		}
+
 		f.Position.X = math.Cos(f.TargetAngle) * f.Radius
 		f.Position.Z = math.Sin(f.TargetAngle) * f.Radius
+		f.Position.Y = 1.2
 		f.LastUpdate = now
 	}
 

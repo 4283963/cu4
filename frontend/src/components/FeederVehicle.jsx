@@ -2,6 +2,10 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
+const POOL_RADIUS = 15.0;
+const SAFE_MARGIN = 1.2;
+const MAX_SAFE_RADIUS = POOL_RADIUS - SAFE_MARGIN;
+
 export default function FeederVehicle({ feeder, baseHeight }) {
   const groupRef = useRef(null);
   const propellerRef = useRef(null);
@@ -9,6 +13,8 @@ export default function FeederVehicle({ feeder, baseHeight }) {
   const trailPositions = useRef(null);
   const trailColors = useRef(null);
   const trailIndex = useRef(0);
+  const smoothedRotationRef = useRef(0);
+  const targetYRef = useRef(baseHeight + 1.2);
 
   const maxTrailPoints = 200;
 
@@ -25,51 +31,89 @@ export default function FeederVehicle({ feeder, baseHeight }) {
     return geom;
   }, []);
 
-  useFrame((state) => {
-    if (groupRef.current) {
-      const targetX = feeder.position.x;
-      const targetZ = feeder.position.z;
-      const targetY = baseHeight + feeder.position.y;
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+    if (!feeder) return;
 
-      groupRef.current.position.x = THREE.MathUtils.lerp(
-        groupRef.current.position.x,
-        targetX,
-        0.15
-      );
-      groupRef.current.position.z = THREE.MathUtils.lerp(
-        groupRef.current.position.z,
-        targetZ,
-        0.15
-      );
-      groupRef.current.position.y = THREE.MathUtils.lerp(
-        groupRef.current.position.y,
-        targetY,
-        0.1
-      );
+    const targetX = feeder.position.x;
+    const targetZ = feeder.position.z;
+    targetYRef.current = baseHeight + feeder.position.y;
 
-      const angle = Math.atan2(targetZ - groupRef.current.position.z, targetX - groupRef.current.position.x);
-      if (feeder.speed > 0.01) {
-        groupRef.current.rotation.y = angle + Math.PI / 2;
+    groupRef.current.position.x = THREE.MathUtils.lerp(
+      groupRef.current.position.x,
+      targetX,
+      0.12
+    );
+    groupRef.current.position.z = THREE.MathUtils.lerp(
+      groupRef.current.position.z,
+      targetZ,
+      0.12
+    );
+    groupRef.current.position.y = THREE.MathUtils.lerp(
+      groupRef.current.position.y,
+      targetYRef.current,
+      0.08
+    );
+
+    const currentX = groupRef.current.position.x;
+    const currentZ = groupRef.current.position.z;
+    const currentR = Math.sqrt(currentX * currentX + currentZ * currentZ);
+
+    if (currentR > MAX_SAFE_RADIUS && currentR > 0.0001) {
+      const clampRatio = MAX_SAFE_RADIUS / currentR;
+      groupRef.current.position.x = currentX * clampRatio;
+      groupRef.current.position.z = currentZ * clampRatio;
+    } else if (currentR < 0.5 && currentR > 0.0001) {
+      const clampRatio = 0.5 / currentR;
+      groupRef.current.position.x = currentX * clampRatio;
+      groupRef.current.position.z = currentZ * clampRatio;
+    }
+
+    let desiredYaw;
+    if (feeder.speed > 0.01 && typeof feeder.targetAngle === 'number') {
+      desiredYaw = feeder.targetAngle + Math.PI / 2;
+    } else {
+      const dx = targetX - groupRef.current.position.x;
+      const dz = targetZ - groupRef.current.position.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq > 0.0001) {
+        desiredYaw = Math.atan2(dz, dx) + Math.PI / 2;
+      } else {
+        desiredYaw = smoothedRotationRef.current;
       }
+    }
 
-      if (trailPositions.current && trailColors.current) {
-        const idx = trailIndex.current % maxTrailPoints;
-        trailPositions.current[idx * 3] = groupRef.current.position.x;
-        trailPositions.current[idx * 3 + 1] = targetY - 0.3;
-        trailPositions.current[idx * 3 + 2] = groupRef.current.position.z;
+    let deltaAngle = desiredYaw - smoothedRotationRef.current;
+    while (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+    while (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
 
-        const color = new THREE.Color(feeder.id === 'feeder-1' ? 0x22c55e : 0xf59e0b);
-        trailColors.current[idx * 3] = color.r;
-        trailColors.current[idx * 3 + 1] = color.g;
-        trailColors.current[idx * 3 + 2] = color.b;
+    const lerpFactor = Math.min(1, delta * 8);
+    smoothedRotationRef.current += deltaAngle * lerpFactor;
 
-        trailIndex.current++;
+    let normRot = smoothedRotationRef.current;
+    while (normRot > Math.PI) normRot -= 2 * Math.PI;
+    while (normRot < -Math.PI) normRot += 2 * Math.PI;
+    smoothedRotationRef.current = normRot;
 
-        const drawCount = Math.min(trailIndex.current, maxTrailPoints);
-        trailGeometry.setDrawRange(0, drawCount);
-        trailGeometry.attributes.position.needsUpdate = true;
-        trailGeometry.attributes.color.needsUpdate = true;
-      }
+    groupRef.current.rotation.y = smoothedRotationRef.current;
+
+    if (trailPositions.current && trailColors.current && feeder.isActive) {
+      const idx = trailIndex.current % maxTrailPoints;
+      trailPositions.current[idx * 3] = groupRef.current.position.x;
+      trailPositions.current[idx * 3 + 1] = targetYRef.current - 0.3;
+      trailPositions.current[idx * 3 + 2] = groupRef.current.position.z;
+
+      const color = new THREE.Color(feeder.id === 'feeder-1' ? 0x22c55e : 0xf59e0b);
+      trailColors.current[idx * 3] = color.r;
+      trailColors.current[idx * 3 + 1] = color.g;
+      trailColors.current[idx * 3 + 2] = color.b;
+
+      trailIndex.current++;
+
+      const drawCount = Math.min(trailIndex.current, maxTrailPoints);
+      trailGeometry.setDrawRange(0, drawCount);
+      trailGeometry.attributes.position.needsUpdate = true;
+      trailGeometry.attributes.color.needsUpdate = true;
     }
 
     if (propellerRef.current && feeder.isActive) {
@@ -163,23 +207,22 @@ function FeedEffect({ feedRate }) {
   }, []);
 
   useFrame(() => {
-    if (particlesRef.current) {
-      const positions = particles.geom.attributes.position.array;
+    if (!particlesRef.current) return;
+    const positions = particles.geom.attributes.position.array;
 
-      for (let i = 0; i < particleCount; i++) {
-        positions[i * 3] += particles.velocities[i].x * feedRate;
-        positions[i * 3 + 1] += particles.velocities[i].y * feedRate;
-        positions[i * 3 + 2] += particles.velocities[i].z * feedRate;
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] += particles.velocities[i].x * feedRate;
+      positions[i * 3 + 1] += particles.velocities[i].y * feedRate;
+      positions[i * 3 + 2] += particles.velocities[i].z * feedRate;
 
-        if (positions[i * 3 + 1] < -0.5) {
-          positions[i * 3] = (Math.random() - 0.5) * 0.2;
-          positions[i * 3 + 1] = 0.55;
-          positions[i * 3 + 2] = (Math.random() - 0.5) * 0.2;
-        }
+      if (positions[i * 3 + 1] < -0.5) {
+        positions[i * 3] = (Math.random() - 0.5) * 0.2;
+        positions[i * 3 + 1] = 0.55;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 0.2;
       }
-
-      particles.geom.attributes.position.needsUpdate = true;
     }
+
+    particles.geom.attributes.position.needsUpdate = true;
   });
 
   return (
