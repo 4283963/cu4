@@ -36,10 +36,11 @@ type CoverageGrid struct {
 }
 
 type GridPoint struct {
-	Position   Vector3 `json:"position"`
-	FeedLevel  float64 `json:"feedLevel"`
-	DOLevel    float64 `json:"doLevel"`
-	Covered    bool    `json:"covered"`
+	Position        Vector3 `json:"position"`
+	FeedLevel       float64 `json:"feedLevel"`
+	CumulativeFeed  float64 `json:"cumulativeFeed"`
+	DOLevel         float64 `json:"doLevel"`
+	Covered         bool    `json:"covered"`
 }
 
 type PoolConfig struct {

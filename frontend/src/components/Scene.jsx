@@ -5,7 +5,7 @@ import Pool from './Pool';
 import FeederVehicle from './FeederVehicle';
 import CoverageHeatmap from './CoverageHeatmap';
 
-export default function Scene({ sensorData }) {
+export default function Scene({ sensorData, heatmapVisible = true }) {
   const poolConfig = sensorData?.poolConfig;
   const feeders = sensorData?.feeders || [];
   const waterQuality = sensorData?.waterQuality;
@@ -51,6 +51,7 @@ export default function Scene({ sensorData }) {
               coverage={coverage}
               baseHeight={baseHeight}
               waterHeight={waterHeight}
+              visible={heatmapVisible}
             />
           )}
 

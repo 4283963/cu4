@@ -74,9 +74,10 @@ func NewSimulator() *Simulator {
 					Y: 0.05,
 					Z: math.Sin(angle) * r,
 				},
-				FeedLevel: 0,
-				DOLevel:   6.5,
-				Covered:   false,
+				FeedLevel:      0,
+				CumulativeFeed: 0,
+				DOLevel:        6.5,
+				Covered:        false,
 			}
 			idx++
 		}
@@ -183,6 +184,7 @@ func (s *Simulator) update() {
 	for idx := range s.coverage.Points {
 		p := &s.coverage.Points[idx]
 		p.FeedLevel *= 0.99
+		p.CumulativeFeed *= 0.997
 		p.DOLevel = s.waterQuality.DO + (rand.Float64()-0.5)*0.3
 		p.Covered = false
 
@@ -194,7 +196,9 @@ func (s *Simulator) update() {
 			dz := p.Position.Z - f.Position.Z
 			dist := math.Sqrt(dx*dx + dz*dz)
 			if dist < 3.0 {
-				p.FeedLevel = math.Min(1.0, p.FeedLevel+f.FeedRate*(1.0-dist/3.0))
+				feedAmount := f.FeedRate * (1.0 - dist/3.0)
+				p.FeedLevel = math.Min(1.0, p.FeedLevel+feedAmount)
+				p.CumulativeFeed = math.Min(100.0, p.CumulativeFeed+feedAmount*0.5)
 				p.Covered = true
 			}
 		}

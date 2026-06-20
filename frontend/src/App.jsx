@@ -3,11 +3,13 @@ import Scene from './components/Scene';
 import Dashboard from './components/Dashboard';
 import FeederPanel from './components/FeederPanel';
 import Legend from './components/Legend';
+import HeatmapToggle from './components/HeatmapToggle';
 import useSensorData from './hooks/useSensorData';
 
 export default function App() {
   const { feeders, waterQuality, coverage, connected, timestamp, data } = useSensorData();
   const [showControl, setShowControl] = useState(true);
+  const [heatmapVisible, setHeatmapVisible] = useState(true);
 
   const coveragePercent = useMemo(() => {
     if (!coverage?.points) return 0;
@@ -42,6 +44,9 @@ export default function App() {
       if (e.key === 'c' || e.key === 'C') {
         setShowControl((prev) => !prev);
       }
+      if (e.key === 'h' || e.key === 'H') {
+        setHeatmapVisible((prev) => !prev);
+      }
     };
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
@@ -61,6 +66,7 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <HeatmapToggle enabled={heatmapVisible} onChange={setHeatmapVisible} />
             <div className="text-right">
               <div className="text-xs text-slate-500">圆形养殖池 R1</div>
               <div className="text-sm font-mono text-cyan-400">
@@ -72,7 +78,7 @@ export default function App() {
       </header>
 
       {/* 3D 场景 */}
-      <Scene sensorData={data} />
+      <Scene sensorData={data} heatmapVisible={heatmapVisible} />
 
       {/* 左侧面板 - 水质监测 */}
       <div className="absolute left-5 top-24 z-10 w-72 space-y-4">
@@ -117,7 +123,9 @@ export default function App() {
           </div>
           <div className="w-px h-4 bg-slate-700" />
           <div className="text-xs text-slate-500">
-            按 <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300">C</kbd> 切换控制面板
+            按 <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300">C</kbd> 控制面板
+            <span className="mx-1">·</span>
+            <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300">H</kbd> 热力图
           </div>
         </div>
       </div>
